@@ -1,5 +1,7 @@
 # Gemini API 密钥池
 
+[English](README.md)
+
 ## 项目概述
 
 本项目是一个使用 Rust 编写的轻量级、高性能代理服务器。它提供了一个与 OpenAI API 兼容的接口 (`/v1/chat/completions`)，并将接收到的请求智能地路由到 Google Gemini API。项目内置了一个 Gemini API 密钥池，每次请求都会轮换使用密钥，从而实现负载均衡和 API 配额的有效管理。

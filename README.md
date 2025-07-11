@@ -1,5 +1,7 @@
 # Gemini API Pool
 
+[简体中文](README.zh-CN.md)
+
 ## Overview
 
 This project provides a lightweight, high-performance proxy server written in Rust. It exposes an OpenAI-compatible API endpoint (`/v1/chat/completions`) and intelligently routes requests to the Google Gemini API. It manages a pool of Gemini API keys, rotating them for each request to distribute the load and manage API quotas effectively.
