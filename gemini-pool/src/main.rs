@@ -1,15 +1,98 @@
 use axum::{
-    extract::State,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::{get, post},
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+    middleware,
+    response::{Html, IntoResponse, Response},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::{SqlitePool, Row};
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use tower_http::services::ServeDir;
+use tower_http::cors::CorsLayer;
 use tracing::info;
+use chrono::{DateTime, Utc};
+use uuid::Uuid;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+
+//================================================================================
+// Database Models
+//================================================================================
+
+#[derive(Debug, Serialize, Clone)]
+struct ApiKey {
+    id: Uuid,
+    key_name: String,
+    api_key: String,
+    is_active: bool,
+    created_at: DateTime<Utc>,
+    total_requests: i64,
+    total_input_tokens: i64,
+    total_output_tokens: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct UsageLog {
+    id: Uuid,
+    api_key_id: Uuid,
+    timestamp: DateTime<Utc>,
+    endpoint: String,
+    model: String,
+    input_tokens: i32,
+    output_tokens: i32,
+    success: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Debug, Serialize)]
+struct LoginResponse {
+    token: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DashboardStats {
+    total_api_keys: i64,
+    total_requests: i64,
+    total_tokens: i64,
+    active_keys: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiKeysResponse {
+    api_keys: Vec<ApiKey>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateApiKeyRequest {
+    key_name: String,
+    api_key: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CreateApiKeyResponse {
+    id: String,
+    api_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateApiKeyRequest {
+    key_name: String,
+    is_active: bool,
+}
 
 //================================================================================
 // AppState: Core application state
@@ -19,6 +102,10 @@ use tracing::info;
 struct AppState {
     api_keys: Vec<String>,
     counter: AtomicUsize,
+    db_pool: SqlitePool,
+    jwt_secret: String,
+    admin_username: String,
+    admin_password: String,
 }
 
 impl AppState {
@@ -166,6 +253,425 @@ struct GeminiCandidate {
     content: GeminiContent,
 }
 
+
+//================================================================================
+// Database Functions
+//================================================================================
+
+async fn initialize_database(pool: &SqlitePool) -> anyhow::Result<()> {
+    // Create api_keys table
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id TEXT PRIMARY KEY,
+            key_name TEXT NOT NULL,
+            api_key TEXT NOT NULL UNIQUE,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            total_requests INTEGER NOT NULL DEFAULT 0,
+            total_input_tokens INTEGER NOT NULL DEFAULT 0,
+            total_output_tokens INTEGER NOT NULL DEFAULT 0
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Create usage_logs table
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS usage_logs (
+            id TEXT PRIMARY KEY,
+            api_key_id TEXT NOT NULL,
+            timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            endpoint TEXT NOT NULL,
+            model TEXT NOT NULL,
+            input_tokens INTEGER NOT NULL DEFAULT 0,
+            output_tokens INTEGER NOT NULL DEFAULT 0,
+            success BOOLEAN NOT NULL DEFAULT TRUE,
+            FOREIGN KEY (api_key_id) REFERENCES api_keys (id)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    info!("Database initialized successfully");
+    Ok(())
+}
+
+async fn get_or_create_api_key(pool: &SqlitePool, api_key: &str) -> anyhow::Result<Uuid> {
+    // Try to find existing API key
+    if let Some(row) = sqlx::query("SELECT id FROM api_keys WHERE api_key = ?")
+        .bind(api_key)
+        .fetch_optional(pool)
+        .await?
+    {
+        let id_str: String = row.get("id");
+        return Ok(Uuid::parse_str(&id_str)?);
+    }
+
+    // Create new API key entry
+    let id = Uuid::new_v4();
+    let key_name = format!("API Key {}", &api_key[..8.min(api_key.len())]);
+    
+    sqlx::query(
+        "INSERT INTO api_keys (id, key_name, api_key) VALUES (?, ?, ?)"
+    )
+    .bind(id.to_string())
+    .bind(&key_name)
+    .bind(api_key)
+    .execute(pool)
+    .await?;
+
+    Ok(id)
+}
+
+async fn log_usage(
+    pool: &SqlitePool,
+    api_key_id: Uuid,
+    endpoint: &str,
+    model: &str,
+    input_tokens: i32,
+    output_tokens: i32,
+    success: bool,
+) -> anyhow::Result<()> {
+    let log_id = Uuid::new_v4();
+    
+    // Insert usage log
+    sqlx::query(
+        "INSERT INTO usage_logs (id, api_key_id, endpoint, model, input_tokens, output_tokens, success) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(log_id.to_string())
+    .bind(api_key_id.to_string())
+    .bind(endpoint)
+    .bind(model)
+    .bind(input_tokens)
+    .bind(output_tokens)
+    .bind(success)
+    .execute(pool)
+    .await?;
+
+    // Update totals in api_keys table
+    sqlx::query(
+        "UPDATE api_keys 
+         SET total_requests = total_requests + 1,
+             total_input_tokens = total_input_tokens + ?,
+             total_output_tokens = total_output_tokens + ?
+         WHERE id = ?"
+    )
+    .bind(input_tokens)
+    .bind(output_tokens)
+    .bind(api_key_id.to_string())
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+//================================================================================
+// Authentication Middleware
+//================================================================================
+
+/// Middleware to verify API key in Authorization header
+async fn auth_middleware(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    mut request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Result<axum::response::Response, AppError> {
+    // Check Authorization header
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| AppError::BadRequest("Missing Authorization header".to_string()))?;
+
+    // Expect "Bearer <api_key>" format
+    if !auth_header.starts_with("Bearer ") {
+        return Err(AppError::BadRequest("Invalid Authorization header format. Expected: Bearer <api_key>".to_string()));
+    }
+
+    let provided_key = auth_header.strip_prefix("Bearer ").unwrap();
+    
+    // Verify the API key exists in database and is active
+    let api_key_result = sqlx::query("SELECT id FROM api_keys WHERE api_key = ? AND is_active = TRUE")
+        .bind(provided_key)
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    let api_key_id = api_key_result
+        .ok_or_else(|| AppError::BadRequest("Invalid or inactive API key".to_string()))?
+        .get::<String, _>("id");
+
+    // Store the API key ID in request extensions for later use
+    request.extensions_mut().insert(api_key_id);
+
+    // If authentication successful, continue to the handler
+    Ok(next.run(request).await)
+}
+
+//================================================================================
+// Admin API Handlers
+//================================================================================
+
+async fn admin_login(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<LoginRequest>,
+) -> Result<Json<LoginResponse>, AppError> {
+    // Verify credentials
+    if payload.username != state.admin_username || payload.password != state.admin_password {
+        return Err(AppError::BadRequest("Invalid credentials".to_string()));
+    }
+
+    // Create JWT token
+    let claims = Claims {
+        sub: payload.username,
+        exp: (chrono::Utc::now() + chrono::Duration::hours(24)).timestamp() as usize,
+    };
+
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(state.jwt_secret.as_ref()),
+    )
+    .map_err(|e| AppError::Internal(e.into()))?;
+
+    Ok(Json(LoginResponse { token }))
+}
+
+async fn admin_verify_token(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| AppError::BadRequest("Missing Authorization header".to_string()))?;
+
+    if !auth_header.starts_with("Bearer ") {
+        return Err(AppError::BadRequest("Invalid Authorization header format".to_string()));
+    }
+
+    let token = auth_header.strip_prefix("Bearer ").unwrap();
+    
+    decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(state.jwt_secret.as_ref()),
+        &Validation::default(),
+    )
+    .map_err(|_| AppError::BadRequest("Invalid token".to_string()))?;
+
+    Ok(Json(serde_json::json!({"status": "valid"})))
+}
+
+async fn admin_dashboard(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<DashboardStats>, AppError> {
+    let total_api_keys = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM api_keys")
+        .fetch_one(&state.db_pool)
+        .await
+        .unwrap_or(0);
+
+    let total_requests = sqlx::query_scalar::<_, i64>("SELECT SUM(total_requests) FROM api_keys")
+        .fetch_one(&state.db_pool)
+        .await
+        .unwrap_or(0);
+
+    let total_input_tokens = sqlx::query_scalar::<_, i64>("SELECT SUM(total_input_tokens) FROM api_keys")
+        .fetch_one(&state.db_pool)
+        .await
+        .unwrap_or(0);
+
+    let total_output_tokens = sqlx::query_scalar::<_, i64>("SELECT SUM(total_output_tokens) FROM api_keys")
+        .fetch_one(&state.db_pool)
+        .await
+        .unwrap_or(0);
+
+    let active_keys = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM api_keys WHERE is_active = TRUE")
+        .fetch_one(&state.db_pool)
+        .await
+        .unwrap_or(0);
+
+    Ok(Json(DashboardStats {
+        total_api_keys,
+        total_requests,
+        total_tokens: total_input_tokens + total_output_tokens,
+        active_keys,
+    }))
+}
+
+async fn admin_list_api_keys(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ApiKeysResponse>, AppError> {
+    let rows = sqlx::query(
+        "SELECT id, key_name, api_key, is_active, created_at, total_requests, total_input_tokens, total_output_tokens 
+         FROM api_keys ORDER BY created_at DESC"
+    )
+    .fetch_all(&state.db_pool)
+    .await
+    .map_err(|e| AppError::Internal(e.into()))?;
+
+    let api_keys: Vec<ApiKey> = rows
+        .into_iter()
+        .map(|row| ApiKey {
+            id: Uuid::parse_str(&row.get::<String, _>("id")).unwrap(),
+            key_name: row.get("key_name"),
+            api_key: row.get("api_key"),
+            is_active: row.get("is_active"),
+            created_at: row.get("created_at"),
+            total_requests: row.get("total_requests"),
+            total_input_tokens: row.get("total_input_tokens"),
+            total_output_tokens: row.get("total_output_tokens"),
+        })
+        .collect();
+
+    Ok(Json(ApiKeysResponse { api_keys }))
+}
+
+async fn admin_get_api_key(
+    State(state): State<Arc<AppState>>,
+    Path(key_id): Path<String>,
+) -> Result<Json<ApiKey>, AppError> {
+    let row = sqlx::query(
+        "SELECT id, key_name, api_key, is_active, created_at, total_requests, total_input_tokens, total_output_tokens 
+         FROM api_keys WHERE id = ?"
+    )
+    .bind(&key_id)
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| AppError::Internal(e.into()))?
+    .ok_or_else(|| AppError::BadRequest("API Key not found".to_string()))?;
+
+    let api_key = ApiKey {
+        id: Uuid::parse_str(&row.get::<String, _>("id")).unwrap(),
+        key_name: row.get("key_name"),
+        api_key: row.get("api_key"),
+        is_active: row.get("is_active"),
+        created_at: row.get("created_at"),
+        total_requests: row.get("total_requests"),
+        total_input_tokens: row.get("total_input_tokens"),
+        total_output_tokens: row.get("total_output_tokens"),
+    };
+
+    Ok(Json(api_key))
+}
+
+async fn admin_create_api_key(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateApiKeyRequest>,
+) -> Result<Json<CreateApiKeyResponse>, AppError> {
+    let api_key = payload.api_key.unwrap_or_else(|| {
+        // Generate a random API key
+        format!("gp_{}", uuid::Uuid::new_v4().to_string().replace("-", ""))
+    });
+
+    let id = Uuid::new_v4();
+
+    sqlx::query(
+        "INSERT INTO api_keys (id, key_name, api_key) VALUES (?, ?, ?)"
+    )
+    .bind(id.to_string())
+    .bind(&payload.key_name)
+    .bind(&api_key)
+    .execute(&state.db_pool)
+    .await
+    .map_err(|e| AppError::Internal(e.into()))?;
+
+    Ok(Json(CreateApiKeyResponse {
+        id: id.to_string(),
+        api_key,
+    }))
+}
+
+async fn admin_update_api_key(
+    State(state): State<Arc<AppState>>,
+    Path(key_id): Path<String>,
+    Json(payload): Json<UpdateApiKeyRequest>,
+) -> Result<StatusCode, AppError> {
+    let result = sqlx::query(
+        "UPDATE api_keys SET key_name = ?, is_active = ? WHERE id = ?"
+    )
+    .bind(&payload.key_name)
+    .bind(payload.is_active)
+    .bind(&key_id)
+    .execute(&state.db_pool)
+    .await
+    .map_err(|e| AppError::Internal(e.into()))?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::BadRequest("API Key not found".to_string()));
+    }
+
+    Ok(StatusCode::OK)
+}
+
+async fn admin_delete_api_key(
+    State(state): State<Arc<AppState>>,
+    Path(key_id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let result = sqlx::query("DELETE FROM api_keys WHERE id = ?")
+        .bind(&key_id)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::BadRequest("API Key not found".to_string()));
+    }
+
+    // Also delete related usage logs
+    sqlx::query("DELETE FROM usage_logs WHERE api_key_id = ?")
+        .bind(&key_id)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    Ok(StatusCode::OK)
+}
+
+async fn admin_auth_middleware(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Result<axum::response::Response, AppError> {
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| AppError::BadRequest("Missing Authorization header".to_string()))?;
+
+    if !auth_header.starts_with("Bearer ") {
+        return Err(AppError::BadRequest("Invalid Authorization header format".to_string()));
+    }
+
+    let token = auth_header.strip_prefix("Bearer ").unwrap();
+    
+    decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(state.jwt_secret.as_ref()),
+        &Validation::default(),
+    )
+    .map_err(|_| AppError::BadRequest("Invalid or expired token".to_string()))?;
+
+    Ok(next.run(request).await)
+}
+
+//================================================================================
+// Token Counting Functions
+//================================================================================
+
+/// Simple token counting function (approximation)
+fn count_tokens(text: &str) -> i32 {
+    // Simple approximation: roughly 1 token per 4 characters for English text
+    // This is a rough estimate; for production use, you'd want a proper tokenizer
+    (text.len() as f32 / 4.0).ceil() as i32
+}
+
+fn count_tokens_in_messages(messages: &[OpenAIMessage]) -> i32 {
+    messages.iter().map(|msg| count_tokens(&msg.content)).sum()
+}
 
 //================================================================================
 // API Handler and Logic
@@ -425,17 +931,90 @@ async fn main() -> anyhow::Result<()> {
     }
     info!("Loaded {} API keys.", api_keys.len());
 
+    // Load admin credentials
+    let admin_username = env::var("ADMIN_USERNAME")
+        .unwrap_or_else(|_| "admin".to_string());
+    let admin_password = env::var("ADMIN_PASSWORD")
+        .expect("ADMIN_PASSWORD must be set in .env file for admin authentication");
+    if admin_password.is_empty() {
+        panic!("ADMIN_PASSWORD must not be empty");
+    }
+    
+    // Load JWT secret
+    let jwt_secret = env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "default_jwt_secret_change_in_production".to_string());
+    
+    info!("Admin authentication configured.");
+
+    // Initialize database
+    let database_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite:./gemini_pool.db".to_string());
+    
+    let db_pool = SqlitePool::connect(&database_url)
+        .await
+        .expect("Failed to connect to database");
+    
+    initialize_database(&db_pool)
+        .await
+        .expect("Failed to initialize database");
+
     // Create shared state
     let app_state = Arc::new(AppState {
         api_keys,
         counter: AtomicUsize::new(0),
+        db_pool,
+        jwt_secret,
+        admin_username,
+        admin_password,
     });
 
-    // Create Axum router
-    let app = Router::new()
-        .route("/", get(root_handler))
+    // Create protected API routes that require client API key authentication
+    let protected_api_routes = Router::new()
         .route("/v1/chat/completions", post(chat_completions_handler))
         .route("/v1/models", get(list_models_handler))
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            auth_middleware,
+        ));
+
+    // Create admin routes that require admin JWT authentication
+    let admin_routes = Router::new()
+        .route("/api/admin/dashboard", get(admin_dashboard))
+        .route("/api/admin/api-keys", get(admin_list_api_keys))
+        .route("/api/admin/api-keys", post(admin_create_api_key))
+        .route("/api/admin/api-keys/:id", get(admin_get_api_key))
+        .route("/api/admin/api-keys/:id", put(admin_update_api_key))
+        .route("/api/admin/api-keys/:id", delete(admin_delete_api_key))
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            admin_auth_middleware,
+        ));
+
+    // Create public admin auth routes
+    let auth_routes = Router::new()
+        .route("/api/auth/login", post(admin_login))
+        .route("/api/auth/verify", get(admin_verify_token));
+
+    // Create static file service for web interface
+    let static_service = ServeDir::new("web")
+        .not_found_service(ServeDir::new("web").fallback(tower::service_fn(|_| async {
+            Ok::<_, std::convert::Infallible>(
+                axum::response::Response::builder()
+                    .status(404)
+                    .body("File not found".into())
+                    .unwrap()
+            )
+        })));
+
+    // Create main Axum router
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .merge(protected_api_routes)
+        .merge(admin_routes)
+        .merge(auth_routes)
+        .nest_service("/admin", static_service.clone())
+        .nest_service("/", static_service)
+        .layer(CorsLayer::permissive())
         .with_state(app_state);
 
     // Get listen address from environment or use default for containerized environments

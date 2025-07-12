@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="login_title">Gemini Pool - 管理员登录</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 科技网格背景 -->
+    <div class="tech-grid"></div>
+    
+    <!-- 矩阵雨背景画布 -->
+    <canvas class="matrix-bg" id="matrix"></canvas>
+    
+    <div class="login-container">
+        <div class="login-form tech-border">
+            <h1 class="login-title" data-i18n="login_title">GEMINI POOL</h1>
+            <p class="login-subtitle" data-i18n="login_subtitle">管理员控制台</p>
+            
+            <!-- 消息显示区域 -->
+            <div id="message-container"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username" class="form-label" data-i18n="username">用户名</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-input" 
+                        data-i18n="username_placeholder"
+                        placeholder="输入管理员用户名"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label" data-i18n="password">密码</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-input" 
+                        data-i18n="password_placeholder"
+                        placeholder="输入管理员密码"
+                        required
+                    >
+                </div>
+                
+                <button type="submit" class="btn btn-full" id="loginBtn">
+                    <span id="loginBtnText" data-i18n="login_button">登录系统</span>
+                    <span id="loginBtnLoading" class="loading" style="display: none;"></span>
+                </button>
+            </form>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem; text-align: center;">
+                <p data-i18n="ai_powered">🤖 AI-Powered API Gateway</p>
+                <p data-i18n="version">Version 1.0.0</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/i18n.js"></script>
+    <script src="js/matrix.js"></script>
+    <script src="js/login.js"></script>
+</body>
+</html>
