@@ -10,7 +10,7 @@ RUN USER=root cargo new --bin gemini-pool
 WORKDIR /usr/src/app/gemini-pool
 
 # Copy over the dependency manifests.
-COPY gemini-pool/Cargo.toml gemini-pool/Cargo.lock ./
+COPY Cargo.toml Cargo.lock ./
 
 # Install build dependencies for OpenSSL.
 RUN apt-get update && apt-get install -y pkg-config libssl-dev
@@ -20,7 +20,7 @@ RUN cargo build --release
 RUN rm src/*.rs
 
 # Copy the actual source code.
-COPY ./gemini-pool/src ./src
+COPY ./src ./src
 
 # Build the application.
 # This will use the cached dependencies if the source code has not changed.

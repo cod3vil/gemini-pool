@@ -21,7 +21,7 @@ echo "✅ Environment file found."
 
 # 2. Build the Docker image
 echo "🚀 Building Docker image '$IMAGE_NAME'..."
-docker build -t "$IMAGE_NAME" -f "$DOCKERFILE" .
+docker build -t "$IMAGE_NAME" -f "$DOCKERFILE" gemini-pool/
 echo "✅ Docker image built successfully."
 
 # 3. Stop and remove any existing container
