@@ -188,7 +188,7 @@ class ApiKeyManagement {
         this.setEditLoading(true);
         
         try {
-            const response = await fetch(`/api/admin/api-keys/${keyId}`, {
+            const response = await fetch(`/admin/api/api-keys/${keyId}`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${this.token}`,
@@ -223,7 +223,7 @@ class ApiKeyManagement {
         }
         
         try {
-            const response = await fetch(`/api/admin/api-keys/${keyId}`, {
+            const response = await fetch(`/admin/api/api-keys/${keyId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${this.token}`
@@ -246,7 +246,7 @@ class ApiKeyManagement {
     
     async showEditModal(keyId) {
         try {
-            const response = await fetch(`/api/admin/api-keys/${keyId}`, {
+            const response = await fetch(`/admin/api/api-keys/${keyId}`, {
                 headers: {
                     'Authorization': `Bearer ${this.token}`
                 }
@@ -275,16 +275,21 @@ class ApiKeyManagement {
     }
     
     showCreateModal() {
+        console.log('showCreateModal called'); // 调试信息
+        alert('创建模态框被调用'); // 临时测试
         this.createForm.reset();
+        this.createModal.style.display = 'block';
         this.createModal.classList.add('show');
     }
     
     hideCreateModal() {
+        this.createModal.style.display = 'none';
         this.createModal.classList.remove('show');
         this.createForm.reset();
     }
     
     hideEditModal() {
+        this.editModal.style.display = 'none';
         this.editModal.classList.remove('show');
         this.editForm.reset();
     }
@@ -389,5 +394,7 @@ function logout() {
 // 页面加载完成后初始化管理功能
 let management;
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing management...'); // 调试信息
     management = new ApiKeyManagement();
+    console.log('Management initialized:', management); // 调试信息
 });

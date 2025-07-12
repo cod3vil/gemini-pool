@@ -55,7 +55,7 @@ body.login-page {
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 1;
+    z-index: 0;
 }
 
 /* Language switcher */
@@ -457,6 +457,10 @@ h2, .section-title {
     background: rgba(0, 0, 0, 0.8);
 }
 
+.modal.show {
+    display: block;
+}
+
 .modal-content {
     background: linear-gradient(135deg, var(--background-dark) 0%, var(--background-medium) 50%, var(--background-light) 100%);
     margin: 5% auto;
@@ -490,16 +494,22 @@ h2, .section-title {
     text-align: center;
 }
 
-.message.success {
+.message.success, .message-success {
     background: rgba(0, 255, 65, 0.2);
     border: 1px solid var(--success-color);
     color: var(--success-color);
 }
 
-.message.error {
+.message.error, .message-error {
     background: rgba(255, 71, 87, 0.2);
     border: 1px solid var(--error-color);
     color: var(--error-color);
+}
+
+.message.warning, .message-warning {
+    background: rgba(255, 165, 2, 0.2);
+    border: 1px solid var(--warning-color);
+    color: var(--warning-color);
 }
 
 /* Action buttons container */
@@ -563,7 +573,7 @@ h2, .section-title {
 }
 
 /* Loading spinner */
-.loading-spinner {
+.loading-spinner, .loading {
     display: inline-block;
     width: 20px;
     height: 20px;
