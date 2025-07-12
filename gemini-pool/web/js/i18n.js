@@ -270,9 +270,18 @@ class I18n {
         window.dispatchEvent(event);
     }
     
+    // 检查是否在管理页面
+    isManagementPage() {
+        const currentPath = window.location.pathname;
+        return currentPath.includes('management.html');
+    }
+    
     // 初始化
     init() {
-        this.createLanguageSwitcher();
+        // 只在非管理页面显示语言切换器
+        if (!this.isManagementPage()) {
+            this.createLanguageSwitcher();
+        }
         this.updatePageContent();
         
         // 监听语言切换事件
