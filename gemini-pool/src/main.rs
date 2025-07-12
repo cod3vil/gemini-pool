@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     middleware,
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -982,9 +982,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/admin/dashboard", get(admin_dashboard))
         .route("/api/admin/api-keys", get(admin_list_api_keys))
         .route("/api/admin/api-keys", post(admin_create_api_key))
-        .route("/api/admin/api-keys/:id", get(admin_get_api_key))
-        .route("/api/admin/api-keys/:id", put(admin_update_api_key))
-        .route("/api/admin/api-keys/:id", delete(admin_delete_api_key))
+        .route("/api/admin/api-keys/{id}", get(admin_get_api_key))
+        .route("/api/admin/api-keys/{id}", put(admin_update_api_key))
+        .route("/api/admin/api-keys/{id}", delete(admin_delete_api_key))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             admin_auth_middleware,
@@ -996,15 +996,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/auth/verify", get(admin_verify_token));
 
     // Create static file service for web interface
-    let static_service = ServeDir::new("web")
-        .not_found_service(ServeDir::new("web").fallback(tower::service_fn(|_| async {
-            Ok::<_, std::convert::Infallible>(
-                axum::response::Response::builder()
-                    .status(404)
-                    .body("File not found".into())
-                    .unwrap()
-            )
-        })));
+    let static_service = ServeDir::new("web");
 
     // Create main Axum router
     let app = Router::new()
@@ -1012,8 +1004,8 @@ async fn main() -> anyhow::Result<()> {
         .merge(protected_api_routes)
         .merge(admin_routes)
         .merge(auth_routes)
-        .nest_service("/admin", static_service.clone())
-        .nest_service("/", static_service)
+        .nest_service("/admin", static_service)
+        .fallback_service(ServeDir::new("web"))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 

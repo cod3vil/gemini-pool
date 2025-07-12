@@ -34,7 +34,7 @@ fi
 
 # 4. Run the new Docker container in detached mode
 echo "🚀 Starting new container '$CONTAINER_NAME' on port $EXTERNAL_PORT..."
-docker run -d --name "$CONTAINER_NAME" --env-file "$ENV_FILE" -p "${EXTERNAL_PORT}:8080" "$IMAGE_NAME"
+docker run -d --name "$CONTAINER_NAME" --env-file "$ENV_FILE" -p "${EXTERNAL_PORT}:8080" -v gemini-pool-data:/data "$IMAGE_NAME"
 
 echo "✅ Container started successfully!"
 echo "👉 Your service is now available at http://127.0.0.1:${EXTERNAL_PORT}"

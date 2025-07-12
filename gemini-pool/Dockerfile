@@ -44,8 +44,20 @@ RUN apt-get update && \
 # Set the working directory.
 WORKDIR /usr/local/bin
 
+# Create a directory for the database and give permissions
+RUN mkdir -p /data && chmod 777 /data
+
 # Copy the compiled binary from the builder stage.
 COPY --from=builder /usr/src/app/gemini-pool/target/release/gemini-pool .
+
+# Copy the web directory for static files
+COPY ./web ./web
+
+# Ensure the working directory has write permissions for database creation
+RUN chmod 777 /usr/local/bin
+
+# Pre-create the database file with proper permissions
+RUN touch gemini_pool.db && chmod 666 gemini_pool.db
 
 # Expose the port the app runs on.
 EXPOSE 8080
