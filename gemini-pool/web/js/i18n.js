@@ -38,7 +38,7 @@ class I18n {
                 'invalid_credentials': '用户名或密码错误',
                 'missing_credentials': '请输入用户名和密码',
                 'network_error': '网络错误，请稍后重试',
-                'ai_powered': '🤖 AI-Powered API Gateway',
+                'ai_powered': 'AI-Powered API Gateway',
                 'version': 'Version 1.0.0',
                 
                 // 管理页面
@@ -136,7 +136,7 @@ class I18n {
                 'invalid_credentials': 'Invalid username or password',
                 'missing_credentials': 'Please enter username and password',
                 'network_error': 'Network error, please try again later',
-                'ai_powered': '🤖 AI-Powered API Gateway',
+                'ai_powered': 'AI-Powered API Gateway',
                 'version': 'Version 1.0.0',
                 
                 // Management page
@@ -286,7 +286,6 @@ class I18n {
         switcher.className = 'language-switcher';
         switcher.innerHTML = `
             <div class="language-selector">
-                <span class="lang-icon">🌐</span>
                 <div class="lang-options">
                     <button class="lang-btn" data-lang="zh" title="中文">中</button>
                     <button class="lang-btn" data-lang="en" title="English">EN</button>
