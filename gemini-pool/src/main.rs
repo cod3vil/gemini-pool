@@ -994,9 +994,9 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(root_handler))
         .merge(protected_api_routes)
-        .merge(admin_routes)
-        .merge(auth_routes)
-        .nest_service("/admin", static_service)
+        .merge(admin_routes)  // API routes must come first to have higher priority
+        .merge(auth_routes)   // Auth routes must come before static service
+        .nest_service("/admin", static_service)  // Static files come last
         .fallback_service(ServeDir::new("web"))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
