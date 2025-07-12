@@ -166,3 +166,191 @@ curl -X POST http://127.0.0.1:8080/v1/chat/completions \
 curl -H "Authorization: Bearer your_client_api_key" \
      http://127.0.0.1:8080/v1/models
 ```
+
+## 使用 Nginx 进行生产部署
+
+对于生产环境，建议在 Gemini Pool 服务前使用 nginx 作为反向代理。这可以提供额外的安全性、SSL 终止和负载均衡功能。
+
+### Nginx 配置示例
+
+创建一个 nginx 配置文件 (`/etc/nginx/sites-available/gemini-pool`)：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    # 将 HTTP 重定向到 HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    # SSL 配置
+    ssl_certificate /path/to/your/fullchain.pem;
+    ssl_certificate_key /path/to/your/private.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    
+    # 安全头设置
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    
+    # 速率限制
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
+    
+    # API 接口 (速率限制)
+    location /v1/ {
+        limit_req zone=api burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 增加长时间运行请求的超时时间
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+        
+        # 处理大型请求体
+        client_max_body_size 10M;
+    }
+    
+    # 管理 API 接口 (更严格的速率限制)
+    location /api/ {
+        limit_req zone=admin burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # Web 管理界面
+    location /admin/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # 静态文件回退
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # 健康检查接口
+    location /health {
+        access_log off;
+        proxy_pass http://127.0.0.1:8080/;
+        proxy_set_header Host $host;
+    }
+    
+    # 日志记录
+    access_log /var/log/nginx/gemini-pool.access.log;
+    error_log /var/log/nginx/gemini-pool.error.log;
+}
+```
+
+### 设置 Nginx
+
+1. **安装 Nginx** (如果尚未安装)：
+   ```bash
+   # Ubuntu/Debian
+   sudo apt update && sudo apt install nginx
+   
+   # CentOS/RHEL
+   sudo yum install nginx
+   ```
+
+2. **创建配置文件**：
+   ```bash
+   sudo nano /etc/nginx/sites-available/gemini-pool
+   ```
+
+3. **启用站点**：
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/gemini-pool /etc/nginx/sites-enabled/
+   ```
+
+4. **测试配置**：
+   ```bash
+   sudo nginx -t
+   ```
+
+5. **重新加载 Nginx**：
+   ```bash
+   sudo systemctl reload nginx
+   ```
+
+### SSL 证书设置
+
+对于生产使用，使用 Let's Encrypt 获取 SSL 证书：
+
+```bash
+# 安装 Certbot
+sudo apt install certbot python3-certbot-nginx
+
+# 获取证书
+sudo certbot --nginx -d your-domain.com
+
+# 自动续期 (添加到 crontab)
+0 12 * * * /usr/bin/certbot renew --quiet
+```
+
+### 使用 Docker Compose 与 Nginx
+
+对于完整的生产环境设置，您可以使用 Docker Compose：
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  gemini-pool:
+    build: ./gemini-pool
+    container_name: gemini-pool-app
+    env_file: ./gemini-pool/.env
+    volumes:
+      - gemini-pool-data:/data
+    networks:
+      - internal
+    restart: unless-stopped
+    
+  nginx:
+    image: nginx:alpine
+    container_name: gemini-pool-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./ssl:/etc/nginx/ssl
+      - /var/log/nginx:/var/log/nginx
+    networks:
+      - internal
+    depends_on:
+      - gemini-pool
+    restart: unless-stopped
+
+volumes:
+  gemini-pool-data:
+
+networks:
+  internal:
+    driver: bridge
+```
