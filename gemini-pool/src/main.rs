@@ -677,28 +677,24 @@ fn count_tokens_in_messages(messages: &[OpenAIMessage]) -> i32 {
 // API Handler and Logic
 //================================================================================
 
-/// Handles requests to the root path, listing available endpoints.
-async fn root_handler() -> Json<serde_json::Value> {
-    Json(serde_json::json!({
-        "message": "Welcome to the Gemini API Pool!",
-        "endpoints": [
-            {
-                "path": "/",
-                "methods": ["GET"],
-                "description": "Lists all available endpoints."
-            },
-            {
-                "path": "/v1/chat/completions",
-                "methods": ["POST"],
-                "description": "OpenAI-compatible chat completions endpoint."
-            },
-            {
-                "path": "/v1/models",
-                "methods": ["GET"],
-                "description": "Lists all available models."
-            }
-        ]
-    }))
+/// Handles requests to the root path, serves index.html
+async fn root_handler() -> impl IntoResponse {
+    match std::fs::read_to_string("web/index.html") {
+        Ok(html) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            html
+        ).into_response(),
+        Err(_) => (
+            StatusCode::NOT_FOUND,
+            "Index page not found"
+        ).into_response()
+    }
+}
+
+/// Handles requests to /admin, redirects to login page
+async fn admin_redirect() -> axum::response::Redirect {
+    axum::response::Redirect::permanent("/admin/login.html")
 }
 
 /// Lists the available models by fetching them from the Gemini API.
@@ -979,12 +975,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Create admin routes that require admin JWT authentication
     let admin_routes = Router::new()
-        .route("/api/admin/dashboard", get(admin_dashboard))
-        .route("/api/admin/api-keys", get(admin_list_api_keys))
-        .route("/api/admin/api-keys", post(admin_create_api_key))
-        .route("/api/admin/api-keys/{id}", get(admin_get_api_key))
-        .route("/api/admin/api-keys/{id}", put(admin_update_api_key))
-        .route("/api/admin/api-keys/{id}", delete(admin_delete_api_key))
+        .route("/admin/api/dashboard", get(admin_dashboard))
+        .route("/admin/api/api-keys", get(admin_list_api_keys))
+        .route("/admin/api/api-keys", post(admin_create_api_key))
+        .route("/admin/api/api-keys/{id}", get(admin_get_api_key))
+        .route("/admin/api/api-keys/{id}", put(admin_update_api_key))
+        .route("/admin/api/api-keys/{id}", delete(admin_delete_api_key))
         .layer(middleware::from_fn_with_state(
             app_state.clone(),
             admin_auth_middleware,
@@ -992,8 +988,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Create public admin auth routes
     let auth_routes = Router::new()
-        .route("/api/auth/login", post(admin_login))
-        .route("/api/auth/verify", get(admin_verify_token));
+        .route("/admin/api/auth/login", post(admin_login))
+        .route("/admin/api/auth/verify", get(admin_verify_token));
 
     // Create static file service for web interface
     let static_service = ServeDir::new("web");

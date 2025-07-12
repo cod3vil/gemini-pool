@@ -99,13 +99,31 @@ cd gemini-pool
 
 ### 访问控制面板
 
-1. **登录页面**: 导航到 `http://127.0.0.1:8080/login.html`
-2. **使用您的管理员凭据**（在您的 `.env` 文件中配置）
-3. **访问管理控制面板** `http://127.0.0.1:8080/management.html`
+1. **主页**: 导航到 `http://127.0.0.1:8080/` - 双语（中文/English）功能概览页面，提供管理面板直接链接
+2. **管理界面**: 访问 `http://127.0.0.1:8080/admin` - 管理界面主页
+3. **登录页面**: `http://127.0.0.1:8080/admin/login.html`
+4. **管理控制面板**: `http://127.0.0.1:8080/admin/management.html`
+5. **使用您的管理员凭据**（在您的 `.env` 文件中配置）
+
+### API 接口结构
+
+所有管理 API 接口现在统一组织在 `/admin/api/` 路径下：
+
+- **身份验证**: 
+  - `POST /admin/api/auth/login` - 管理员登录
+  - `GET /admin/api/auth/verify` - Token 验证
+- **控制面板**: `GET /admin/api/dashboard` - 统计信息
+- **API 密钥管理**: 
+  - `GET /admin/api/api-keys` - 列出 API 密钥
+  - `POST /admin/api/api-keys` - 创建 API 密钥
+  - `GET /admin/api/api-keys/{id}` - 获取特定 API 密钥
+  - `PUT /admin/api/api-keys/{id}` - 更新 API 密钥
+  - `DELETE /admin/api/api-keys/{id}` - 删除 API 密钥
 
 ### 功能特性
 
 - **🎨 现代科技风格界面**: 赛博朋克风格设计，带有矩阵雨背景效果
+- **🌍 双语支持**: 完整的中英文界面，支持持久化语言偏好设置
 - **📊 实时仪表板**: 查看 API 密钥总数、请求数、token 数量和活跃密钥数
 - **🔑 API 密钥管理**: 
   - 创建新的 API 密钥（自动生成或自定义）
@@ -171,7 +189,46 @@ curl -H "Authorization: Bearer your_client_api_key" \
 
 对于生产环境，建议在 Gemini Pool 服务前使用 nginx 作为反向代理。这可以提供额外的安全性、SSL 终止和负载均衡功能。
 
-### Nginx 配置示例
+### 简化的 Nginx 配置
+
+得益于重新组织的路由结构（`/admin/api/*` 路径）和专用首页，您可以使用非常简单的 nginx 配置：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    # SSL 配置
+    ssl_certificate /path/to/your/fullchain.pem;
+    ssl_certificate_key /path/to/your/private.key;
+    
+    # 安全头设置
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    
+    # 将所有请求代理到应用程序
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 用于长时间运行的请求
+        proxy_read_timeout 60s;
+        client_max_body_size 10M;
+    }
+}
+```
+
+### 高级 Nginx 配置 (带速率限制)
 
 创建一个 nginx 配置文件 (`/etc/nginx/sites-available/gemini-pool`)：
 
@@ -238,7 +295,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # 静态文件回退
+    # 将根路径重定向到管理员登录页面
+    location = / {
+        return 301 /admin/login.html;
+    }
+    
+    # 静态文件和其他路径
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="title">Gemini API Pool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            z-index: 10;
+            max-width: 800px;
+            padding: 2rem;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            border: 1px solid #00ff41;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #00ff41, #00d4aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            color: #b0b0b0;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .feature {
+            padding: 1.5rem;
+            background: rgba(0, 255, 65, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .feature:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 255, 65, 0.2);
+        }
+
+        .feature h3 {
+            color: #00ff41;
+            margin-bottom: 0.5rem;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: 2px solid;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #00ff41, #00d4aa);
+            color: #000;
+            border-color: #00ff41;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 255, 65, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #00ff41;
+            border-color: #00ff41;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(0, 255, 65, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .api-info {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            border-left: 4px solid #00ff41;
+        }
+
+        .api-info h3 {
+            color: #00ff41;
+            margin-bottom: 0.5rem;
+        }
+
+        .endpoint {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 255, 65, 0.1);
+            padding: 0.5rem;
+            border-radius: 5px;
+            margin: 0.5rem 0;
+        }
+
+        /* Language switcher */
+        .language-switcher {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+        }
+
+        .lang-btn {
+            padding: 8px 12px;
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid rgba(0, 255, 65, 0.5);
+            color: #00ff41;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            text-decoration: none;
+        }
+
+        .lang-btn:hover {
+            background: rgba(0, 255, 65, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .lang-btn.active {
+            background: #00ff41;
+            color: #000;
+        }
+
+        /* Matrix rain effect */
+        .matrix {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+            .container {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+            .buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas class="matrix"></canvas>
+    
+    <!-- Language Switcher -->
+    <div class="language-switcher">
+        <button class="lang-btn" onclick="switchLanguage('zh')">中文</button>
+        <button class="lang-btn" onclick="switchLanguage('en')">English</button>
+    </div>
+    
+    <div class="container">
+        <h1 data-i18n="main.title">🚀 Gemini API Pool</h1>
+        <p class="subtitle" data-i18n="main.subtitle">High-Performance OpenAI-Compatible API Gateway</p>
+        
+        <div class="features">
+            <div class="feature">
+                <h3 data-i18n="features.loadBalancing.title">🔄 Smart Load Balancing</h3>
+                <p data-i18n="features.loadBalancing.desc">Automatic API key rotation for optimal performance</p>
+            </div>
+            <div class="feature">
+                <h3 data-i18n="features.security.title">🛡️ Secure Authentication</h3>
+                <p data-i18n="features.security.desc">JWT-based admin panel with API key management</p>
+            </div>
+            <div class="feature">
+                <h3 data-i18n="features.analytics.title">📊 Real-time Analytics</h3>
+                <p data-i18n="features.analytics.desc">Track usage, tokens, and performance metrics</p>
+            </div>
+            <div class="feature">
+                <h3 data-i18n="features.compatible.title">🌐 OpenAI Compatible</h3>
+                <p data-i18n="features.compatible.desc">Drop-in replacement for OpenAI API clients</p>
+            </div>
+        </div>
+
+        <div class="api-info">
+            <h3 data-i18n="api.title">📡 API Endpoints</h3>
+            <div class="endpoint">POST /v1/chat/completions</div>
+            <div class="endpoint">GET /v1/models</div>
+            <p style="margin-top: 0.5rem; color: #b0b0b0;" data-i18n="api.auth">
+                Use with Authorization: Bearer &lt;your-api-key&gt;
+            </p>
+        </div>
+
+        <div class="buttons">
+            <a href="/admin" class="btn btn-primary" data-i18n="buttons.admin">🎛️ Admin Panel</a>
+            <a href="/admin/login.html" class="btn btn-secondary" data-i18n="buttons.login">🔐 Login</a>
+            <a href="https://github.com/cod3vil/gemini-pool" class="btn btn-secondary" target="_blank" data-i18n="buttons.docs">📚 Documentation</a>
+        </div>
+    </div>
+
+    <script>
+        // Internationalization support
+        const translations = {
+            zh: {
+                title: "Gemini API 密钥池",
+                main: {
+                    title: "🚀 Gemini API 密钥池",
+                    subtitle: "高性能 OpenAI 兼容 API 网关"
+                },
+                features: {
+                    loadBalancing: {
+                        title: "🔄 智能负载均衡",
+                        desc: "自动 API 密钥轮换，优化性能表现"
+                    },
+                    security: {
+                        title: "🛡️ 安全认证",
+                        desc: "基于 JWT 的管理面板和 API 密钥管理"
+                    },
+                    analytics: {
+                        title: "📊 实时分析",
+                        desc: "追踪使用情况、令牌和性能指标"
+                    },
+                    compatible: {
+                        title: "🌐 OpenAI 兼容",
+                        desc: "OpenAI API 客户端的直接替代方案"
+                    }
+                },
+                api: {
+                    title: "📡 API 接口",
+                    auth: "使用方式：Authorization: Bearer &lt;your-api-key&gt;"
+                },
+                buttons: {
+                    admin: "🎛️ 管理面板",
+                    login: "🔐 登录",
+                    docs: "📚 文档"
+                }
+            },
+            en: {
+                title: "Gemini API Pool",
+                main: {
+                    title: "🚀 Gemini API Pool",
+                    subtitle: "High-Performance OpenAI-Compatible API Gateway"
+                },
+                features: {
+                    loadBalancing: {
+                        title: "🔄 Smart Load Balancing",
+                        desc: "Automatic API key rotation for optimal performance"
+                    },
+                    security: {
+                        title: "🛡️ Secure Authentication",
+                        desc: "JWT-based admin panel with API key management"
+                    },
+                    analytics: {
+                        title: "📊 Real-time Analytics",
+                        desc: "Track usage, tokens, and performance metrics"
+                    },
+                    compatible: {
+                        title: "🌐 OpenAI Compatible",
+                        desc: "Drop-in replacement for OpenAI API clients"
+                    }
+                },
+                api: {
+                    title: "📡 API Endpoints",
+                    auth: "Use with Authorization: Bearer &lt;your-api-key&gt;"
+                },
+                buttons: {
+                    admin: "🎛️ Admin Panel",
+                    login: "🔐 Login",
+                    docs: "📚 Documentation"
+                }
+            }
+        };
+
+        let currentLang = localStorage.getItem('language') || 'zh';
+
+        function updateContent(lang) {
+            const t = translations[lang];
+            
+            // Update title
+            document.title = t.title;
+            
+            // Update all elements with data-i18n attributes
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                const keys = key.split('.');
+                let value = t;
+                
+                for (const k of keys) {
+                    value = value[k];
+                    if (!value) break;
+                }
+                
+                if (value) {
+                    element.innerHTML = value;
+                }
+            });
+            
+            // Update language buttons
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[onclick="switchLanguage('${lang}')"]`).classList.add('active');
+            
+            // Update HTML lang attribute
+            document.documentElement.lang = lang;
+        }
+
+        function switchLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('language', lang);
+            updateContent(lang);
+        }
+
+        // Initialize with saved language
+        updateContent(currentLang);
+
+        // Matrix rain effect
+        const canvas = document.querySelector('.matrix');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const matrix = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789@#$%^&*()*&^%+-/~{[|`]}";
+        const matrixArray = matrix.split("");
+
+        const fontSize = 10;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+
+        for(let x = 0; x < columns; x++) {
+            drops[x] = 1;
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0F0';
+            ctx.font = fontSize + 'px monospace';
+
+            for(let i = 0; i < drops.length; i++) {
+                const text = matrixArray[Math.floor(Math.random() * matrixArray.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        setInterval(draw, 35);
+
+        // Resize canvas on window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

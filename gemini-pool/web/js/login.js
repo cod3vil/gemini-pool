@@ -64,7 +64,7 @@ class Login {
         this.setLoading(true);
         
         try {
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch('/admin/api/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -132,7 +132,7 @@ class Login {
         const token = localStorage.getItem('adminToken');
         if (token) {
             // 验证 token 是否有效
-            fetch('/api/auth/verify', {
+            fetch('/admin/api/auth/verify', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }

@@ -46,7 +46,7 @@ class ApiKeyManagement {
     
     async loadDashboardData() {
         try {
-            const response = await fetch('/api/admin/dashboard', {
+            const response = await fetch('/admin/api/dashboard', {
                 headers: {
                     'Authorization': `Bearer ${this.token}`
                 }
@@ -65,7 +65,7 @@ class ApiKeyManagement {
     
     async loadApiKeys() {
         try {
-            const response = await fetch('/api/admin/api-keys', {
+            const response = await fetch('/admin/api/api-keys', {
                 headers: {
                     'Authorization': `Bearer ${this.token}`
                 }
@@ -142,7 +142,7 @@ class ApiKeyManagement {
         this.setCreateLoading(true);
         
         try {
-            const response = await fetch('/api/admin/api-keys', {
+            const response = await fetch('/admin/api/api-keys', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.token}`,

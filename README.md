@@ -99,13 +99,31 @@ After deployment, you can access the web management interface to manage API keys
 
 ### Accessing the Dashboard
 
-1. **Login Page**: Navigate to `http://127.0.0.1:8080/login.html`
-2. **Use your admin credentials** (from your `.env` file)
-3. **Access the management dashboard** at `http://127.0.0.1:8080/management.html`
+1. **Home Page**: Navigate to `http://127.0.0.1:8080/` - Bilingual (中文/English) features overview with direct links to admin panel
+2. **Admin Interface**: Access `http://127.0.0.1:8080/admin` - Management interface home
+3. **Login Page**: `http://127.0.0.1:8080/admin/login.html`
+4. **Management Dashboard**: `http://127.0.0.1:8080/admin/management.html`
+5. **Use your admin credentials** (from your `.env` file)
+
+### API Endpoints Structure
+
+All admin API endpoints are now organized under `/admin/api/`:
+
+- **Authentication**: 
+  - `POST /admin/api/auth/login` - Admin login
+  - `GET /admin/api/auth/verify` - Token verification
+- **Dashboard**: `GET /admin/api/dashboard` - Statistics
+- **API Key Management**: 
+  - `GET /admin/api/api-keys` - List API keys
+  - `POST /admin/api/api-keys` - Create API key
+  - `GET /admin/api/api-keys/{id}` - Get specific API key
+  - `PUT /admin/api/api-keys/{id}` - Update API key
+  - `DELETE /admin/api/api-keys/{id}` - Delete API key
 
 ### Features
 
 - **🎨 Modern Tech-Styled Interface**: Cyberpunk-inspired design with matrix rain background effects
+- **🌍 Bilingual Support**: Complete Chinese/English interface with persistent language preferences
 - **📊 Real-time Dashboard**: View total API keys, requests, tokens, and active keys
 - **🔑 API Key Management**: 
   - Create new API keys (auto-generated or custom)
@@ -171,7 +189,46 @@ curl -H "Authorization: Bearer your_client_api_key" \
 
 For production environments, it's recommended to use nginx as a reverse proxy in front of the Gemini Pool service. This provides additional security, SSL termination, and load balancing capabilities.
 
-### Nginx Configuration Example
+### Simple Nginx Configuration
+
+Thanks to the reorganized route structure with `/admin/api/*` paths and a dedicated index page, you can use a very simple nginx configuration:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    # SSL Configuration
+    ssl_certificate /path/to/your/fullchain.pem;
+    ssl_certificate_key /path/to/your/private.key;
+    
+    # Security Headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    
+    # Proxy all requests to the application
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # For long-running requests
+        proxy_read_timeout 60s;
+        client_max_body_size 10M;
+    }
+}
+```
+
+### Advanced Nginx Configuration (with Rate Limiting)
 
 Create an nginx configuration file (`/etc/nginx/sites-available/gemini-pool`):
 
@@ -238,7 +295,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # Fallback for static files
+    # Redirect root to admin login page
+    location = / {
+        return 301 /admin/login.html;
+    }
+    
+    # Static files and other paths
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
