@@ -275,8 +275,6 @@ class ApiKeyManagement {
     }
     
     showCreateModal() {
-        console.log('showCreateModal called'); // 调试信息
-        alert('创建模态框被调用'); // 临时测试
         this.createForm.reset();
         this.createModal.style.display = 'block';
         this.createModal.classList.add('show');
@@ -394,7 +392,5 @@ function logout() {
 // 页面加载完成后初始化管理功能
 let management;
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, initializing management...'); // 调试信息
     management = new ApiKeyManagement();
-    console.log('Management initialized:', management); // 调试信息
 });
