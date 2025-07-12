@@ -295,12 +295,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # 将根路径重定向到管理员登录页面
-    location = / {
-        return 301 /admin/login.html;
-    }
     
-    # 静态文件和其他路径
+    # 将所有请求代理到应用程序（包括 index.html 和管理界面）
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;

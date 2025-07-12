@@ -692,10 +692,6 @@ async fn root_handler() -> impl IntoResponse {
     }
 }
 
-/// Handles requests to /admin, redirects to login page
-async fn admin_redirect() -> axum::response::Redirect {
-    axum::response::Redirect::permanent("/admin/login.html")
-}
 
 /// Lists the available models by fetching them from the Gemini API.
 async fn list_models_handler(

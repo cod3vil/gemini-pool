@@ -295,12 +295,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # Redirect root to admin login page
-    location = / {
-        return 301 /admin/login.html;
-    }
     
-    # Static files and other paths
+    # Proxy all requests to the application (includes index.html and admin interface)
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
