@@ -203,13 +203,8 @@ server {
     add_header X-XSS-Protection "1; mode=block";
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     
-    # 速率限制
-    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-    limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
-    
     # API 接口 (速率限制)
     location /v1/ {
-        limit_req zone=api burst=20 nodelay;
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -227,7 +222,6 @@ server {
     
     # 管理 API 接口 (更严格的速率限制)
     location /api/ {
-        limit_req zone=admin burst=10 nodelay;
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -277,22 +271,52 @@ server {
    sudo yum install nginx
    ```
 
-2. **创建配置文件**：
+2. **配置速率限制区域** (选择一种方法)：
+
+   **方法 A: 添加到主 nginx.conf**
+   ```bash
+   sudo nano /etc/nginx/nginx.conf
+   ```
+   在 `http` 块内添加 `limit_req_zone` 指令：
+   ```nginx
+   http {
+       # ... 现有配置 ...
+       
+       # Gemini Pool 的速率限制区域
+       limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+       limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
+       
+       # ... 其余配置 ...
+   }
+   ```
+
+   **方法 B: 创建单独的区域文件**
+   ```bash
+   sudo nano /etc/nginx/conf.d/gemini-pool-zones.conf
+   ```
+   添加速率限制区域：
+   ```nginx
+   limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+   limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
+   ```
+
+3. **创建服务器配置文件**：
    ```bash
    sudo nano /etc/nginx/sites-available/gemini-pool
    ```
+   添加服务器配置 (如果使用上述方法 A 或 B，则不包含 `limit_req_zone` 行)。
 
-3. **启用站点**：
+4. **启用站点**：
    ```bash
    sudo ln -s /etc/nginx/sites-available/gemini-pool /etc/nginx/sites-enabled/
    ```
 
-4. **测试配置**：
+5. **测试配置**：
    ```bash
    sudo nginx -t
    ```
 
-5. **重新加载 Nginx**：
+6. **重新加载 Nginx**：
    ```bash
    sudo systemctl reload nginx
    ```

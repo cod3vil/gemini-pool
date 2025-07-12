@@ -203,13 +203,8 @@ server {
     add_header X-XSS-Protection "1; mode=block";
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     
-    # Rate Limiting
-    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-    limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
-    
     # API endpoints (rate limited)
     location /v1/ {
-        limit_req zone=api burst=20 nodelay;
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -227,7 +222,6 @@ server {
     
     # Admin API endpoints (more restrictive rate limiting)
     location /api/ {
-        limit_req zone=admin burst=10 nodelay;
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -277,22 +271,52 @@ server {
    sudo yum install nginx
    ```
 
-2. **Create the configuration file**:
+2. **Configure rate limiting zones** (choose one method):
+
+   **Method A: Add to main nginx.conf**
+   ```bash
+   sudo nano /etc/nginx/nginx.conf
+   ```
+   Add the `limit_req_zone` directives inside the `http` block:
+   ```nginx
+   http {
+       # ... existing configuration ...
+       
+       # Rate limiting zones for Gemini Pool
+       limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+       limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
+       
+       # ... rest of configuration ...
+   }
+   ```
+
+   **Method B: Create separate zones file**
+   ```bash
+   sudo nano /etc/nginx/conf.d/gemini-pool-zones.conf
+   ```
+   Add the rate limiting zones:
+   ```nginx
+   limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+   limit_req_zone $binary_remote_addr zone=admin:10m rate=5r/s;
+   ```
+
+3. **Create the server configuration file**:
    ```bash
    sudo nano /etc/nginx/sites-available/gemini-pool
    ```
+   Add the server configuration (without the `limit_req_zone` lines if using Method A or B above).
 
-3. **Enable the site**:
+4. **Enable the site**:
    ```bash
    sudo ln -s /etc/nginx/sites-available/gemini-pool /etc/nginx/sites-enabled/
    ```
 
-4. **Test the configuration**:
+5. **Test the configuration**:
    ```bash
    sudo nginx -t
    ```
 
-5. **Reload Nginx**:
+6. **Reload Nginx**:
    ```bash
    sudo systemctl reload nginx
    ```
