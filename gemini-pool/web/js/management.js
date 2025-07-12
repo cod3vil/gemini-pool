@@ -7,8 +7,10 @@ class ApiKeyManagement {
         this.editModal = document.getElementById('editModal');
         this.createForm = document.getElementById('createApiKeyForm');
         this.editForm = document.getElementById('editApiKeyForm');
+        this.toggleKeyBtn = document.getElementById('toggleKeyVisibility');
         
         this.token = localStorage.getItem('adminToken');
+        this.currentApiKey = null; // 存储当前编辑的完整API key
         
         this.init();
     }
@@ -26,6 +28,11 @@ class ApiKeyManagement {
         // 绑定表单事件
         this.createForm.addEventListener('submit', (e) => this.handleCreateApiKey(e));
         this.editForm.addEventListener('submit', (e) => this.handleEditApiKey(e));
+        
+        // 绑定API key显示/隐藏按钮事件
+        if (this.toggleKeyBtn) {
+            this.toggleKeyBtn.addEventListener('click', () => this.toggleApiKeyVisibility());
+        }
         
         // 加载数据
         this.loadDashboardData();
@@ -258,12 +265,17 @@ class ApiKeyManagement {
                 document.getElementById('editKeyId').value = keyData.id;
                 document.getElementById('editKeyName').value = keyData.key_name;
                 
+                // 存储完整的API key并初始显示为掩码
+                this.currentApiKey = keyData.api_key;
+                this.updateApiKeyDisplay(false); // 初始状态为隐藏
+                
                 if (keyData.is_active) {
                     document.getElementById('editActiveTrue').checked = true;
                 } else {
                     document.getElementById('editActiveFalse').checked = true;
                 }
                 
+                this.editModal.style.display = 'block';
                 this.editModal.classList.add('show');
             } else {
                 this.showMessage(window.i18n.t('load_failed'), 'error');
@@ -290,6 +302,13 @@ class ApiKeyManagement {
         this.editModal.style.display = 'none';
         this.editModal.classList.remove('show');
         this.editForm.reset();
+        // 清除单选按钮的选中状态
+        document.getElementById('editActiveTrue').checked = false;
+        document.getElementById('editActiveFalse').checked = false;
+        // 清除API key相关状态
+        this.currentApiKey = null;
+        document.getElementById('editKeyValue').value = '';
+        this.updateToggleButtonText(false);
     }
     
     setCreateLoading(loading) {
@@ -368,6 +387,34 @@ class ApiKeyManagement {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+    
+    toggleApiKeyVisibility() {
+        const keyInput = document.getElementById('editKeyValue');
+        const isCurrentlyMasked = keyInput.value.includes('****');
+        this.updateApiKeyDisplay(!isCurrentlyMasked);
+    }
+    
+    updateApiKeyDisplay(showFull) {
+        const keyInput = document.getElementById('editKeyValue');
+        if (showFull && this.currentApiKey) {
+            keyInput.value = this.currentApiKey;
+        } else if (this.currentApiKey) {
+            keyInput.value = this.maskApiKey(this.currentApiKey);
+        }
+        this.updateToggleButtonText(showFull);
+    }
+    
+    updateToggleButtonText(isShowing) {
+        const toggleBtn = document.getElementById('toggleKeyVisibility');
+        const btnText = toggleBtn.querySelector('span');
+        if (isShowing) {
+            btnText.textContent = window.i18n.t('hide') || '隐藏';
+            btnText.setAttribute('data-i18n', 'hide');
+        } else {
+            btnText.textContent = window.i18n.t('show') || '显示';
+            btnText.setAttribute('data-i18n', 'show');
+        }
     }
 }
 

@@ -119,15 +119,16 @@ body.login-page {
 .container {
     text-align: left;
     z-index: 10;
-    max-width: 1200px;
-    width: 90%;
-    margin: 2rem auto;
+    max-width: none;
+    width: 100%;
+    margin: 0;
     padding: 2rem;
     background: rgba(0, 0, 0, 0.8);
-    border-radius: 20px;
-    border: 1px solid var(--primary-color);
-    box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
     position: relative;
+    min-height: 100vh;
 }
 
 .management-container {
@@ -522,7 +523,13 @@ h2, .section-title {
 
 /* Responsive design */
 @media (max-width: 768px) {
-    .container, .management-container {
+    .container {
+        margin: 0;
+        padding: 1.5rem;
+        width: 100%;
+    }
+    
+    .management-container {
         margin: 1rem;
         padding: 1.5rem;
         width: calc(100% - 2rem);

@@ -77,6 +77,8 @@ class I18n {
                 'save_changes': '保存更改',
                 'enable': '启用',
                 'disable': '禁用',
+                'show': '显示',
+                'hide': '隐藏',
                 
                 // 表格标题
                 'table_name': '名称',
@@ -175,6 +177,8 @@ class I18n {
                 'save_changes': 'Save Changes',
                 'enable': 'Enable',
                 'disable': 'Disable',
+                'show': 'Show',
+                'hide': 'Hide',
                 
                 // Table headers
                 'table_name': 'Name',
